@@ -1,7 +1,6 @@
 import asyncio
 import struct
 from pyadde import util
-import async_timeout
 import io
 import os
 import gzip
@@ -145,12 +144,17 @@ class AddeClient():
 
         try:
             '''
-            ADDE protocol is stateless 100%, that simply means that after servicing a given request the rerver
+            ADDE protocol is stateless 100%, that simply means that after servicing a given request the server
             sends an RST and closes down. No other fancy stuff. This is why the next to lines are here and not in __init__ and __aenter__
             
             '''
-            self.con = asyncio.open_connection(host=self.host, port=self.port)
-            self.reader, self.writer = await asyncio.wait_for(self.con, timeout=self.conn_timeout)
+            self.reader, self.writer = None, None
+
+            async with asyncio.timeout(self.conn_timeout):
+                self.reader, self.writer = await asyncio.open_connection(host=self.host, port=self.port)
+
+            # self.con = asyncio.open_connection(host=self.host, port=self.port)
+            # self.reader, self.writer = await asyncio.wait_for(self.con, timeout=self.conn_timeout)
             logger.debug(f'New connection to {self.host} was opened')
             with io.BytesIO() as total_data:
 
@@ -160,7 +164,7 @@ class AddeClient():
 
                     # flush
                     await self.writer.drain()
-                    with async_timeout.timeout(timeout=timeout):
+                    async with asyncio.timeout(timeout):
                         if not read_in_chunks:
                             # # read at once
                             data = await self.reader.read()
